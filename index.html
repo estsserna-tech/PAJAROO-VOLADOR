@@ -2,113 +2,162 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- viewport para celular: escala 1:1, sin zoom del usuario -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- PWA / pantalla completa en iOS y Android -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Pájaro Volador</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
+
+    html, body {
+      width: 100%; height: 100%;
       background: #1a1a2e;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      /* Evita selección de texto al tocar rápido */
+      user-select: none;
+      -webkit-user-select: none;
+      /* Evita el resaltado azul al tocar en Android */
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+    }
+
+    body {
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
-      overflow: hidden;
-      font-family: Arial, sans-serif;
     }
+
     #gameContainer {
       position: relative;
-      width: 480px;
-      height: 640px;
+      /* El tamaño se calcula en JS según la pantalla */
     }
+
     canvas {
       display: block;
       position: absolute;
       top: 0; left: 0;
+      /* Suaviza el escalado en pantallas de alta densidad */
+      image-rendering: auto;
     }
-    /* Overlay Game Over */
+
+    /* ── Overlay Game Over ── */
     #overlay {
       position: absolute;
       top: 0; left: 0;
-      width: 480px; height: 640px;
+      width: 100%; height: 100%;
       display: none;
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      background: rgba(0,0,0,0.6);
+      background: rgba(0,0,0,0.62);
       z-index: 10;
     }
     #overlay.visible { display: flex; }
+
     #overlay h1 {
       color: #ff4444;
-      font-size: 56px;
       font-weight: 900;
       text-shadow: 3px 3px 0 #000;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
+      /* Tamaño relativo al contenedor, se ajusta con JS */
+      font-size: clamp(28px, 10vw, 56px);
     }
     #overlay .puntos {
       color: #fff;
-      font-size: 28px;
       font-weight: bold;
       text-shadow: 2px 2px 0 #000;
-      margin-bottom: 32px;
+      margin-bottom: 28px;
+      font-size: clamp(16px, 5vw, 28px);
     }
     #btnReiniciar {
       background: linear-gradient(135deg, #f7971e, #ffd200);
       color: #222;
       border: none;
-      border-radius: 12px;
-      padding: 14px 50px;
-      font-size: 22px;
+      border-radius: 14px;
       font-weight: 900;
       cursor: pointer;
       box-shadow: 0 6px 0 #b8860b;
-      min-width: 180px;
-      min-height: 52px;
+      /* Tamaño mínimo táctil recomendado: 48×48 px */
+      min-width: 160px;
+      min-height: 54px;
+      font-size: clamp(16px, 5vw, 22px);
+      padding: 14px 40px;
       transition: transform .1s, box-shadow .1s;
+      touch-action: manipulation;
     }
-    #btnReiniciar:hover  { transform: translateY(-2px); box-shadow: 0 8px 0 #b8860b; }
-    #btnReiniciar:active { transform: translateY(3px);  box-shadow: 0 3px 0 #b8860b; }
-    /* Mensaje de inicio */
+    #btnReiniciar:active {
+      transform: translateY(3px);
+      box-shadow: 0 3px 0 #b8860b;
+    }
+
+    /* ── Pantalla de inicio ── */
     #startMsg {
       position: absolute;
       top: 0; left: 0;
-      width: 480px; height: 640px;
+      width: 100%; height: 100%;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
       background: rgba(0,0,0,0.45);
       z-index: 10;
+      gap: 12px;
     }
     #startMsg h2 {
       color: #fff;
-      font-size: 34px;
       font-weight: 900;
       text-shadow: 2px 2px 0 #000;
-      margin-bottom: 14px;
+      font-size: clamp(22px, 7vw, 36px);
     }
     #startMsg p {
       color: #ffd200;
-      font-size: 20px;
       font-weight: bold;
       text-shadow: 1px 1px 0 #000;
+      font-size: clamp(14px, 4.5vw, 22px);
       animation: pulso 0.9s infinite alternate;
     }
+    /* Ícono de toque para celular */
+    #startMsg .tap-hint {
+      font-size: clamp(36px, 12vw, 64px);
+      animation: pulso 0.9s infinite alternate;
+    }
+
     @keyframes pulso {
       from { opacity: 0.5; transform: scale(1); }
       to   { opacity: 1;   transform: scale(1.07); }
+    }
+
+    /* ── Botón de toque grande (toda la pantalla de juego) ── */
+    #tapZone {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 5;          /* encima del canvas, debajo de overlays */
+      background: transparent;
+      cursor: pointer;
+      touch-action: manipulation;
     }
   </style>
 </head>
 <body>
 <div id="gameContainer">
-  <canvas id="gameCanvas" width="480" height="640"></canvas>
+  <canvas id="gameCanvas"></canvas>
 
+  <!-- Zona de toque transparente que cubre todo el juego -->
+  <div id="tapZone"></div>
+
+  <!-- Pantalla de inicio -->
   <div id="startMsg">
     <h2>🐦 Pájaro Volador</h2>
-    <p>Presiona ESPACIO para jugar</p>
+    <div class="tap-hint">👆</div>
+    <p>Toca la pantalla para jugar</p>
   </div>
 
+  <!-- Pantalla Game Over -->
   <div id="overlay">
     <h1>¡Perdiste!</h1>
     <div class="puntos" id="puntosFinal">Puntuación: 0</div>
@@ -117,7 +166,7 @@
 </div>
 
 <script>
-// ── CONFIGURACIÓN ─────────────────────────────────────────────────────────────
+// ── CONFIGURACIÓN BASE (para canvas 480×640) ──────────────────────────────────
 const CFG = {
   gravity:      0.5,
   flapSpeed:   -8,
@@ -125,11 +174,15 @@ const CFG = {
   pipeSpeed:    3,
   pipeWidth:    60,
   pipeGap:      150,
-  pipeInterval: 1500,   // ms
+  pipeInterval: 1500,
   birdX:        100,
   birdW:        50,
   birdH:        40,
 };
+
+// Dimensiones lógicas fijas del juego
+const GAME_W = 480;
+const GAME_H = 640;
 
 // ── DOM ───────────────────────────────────────────────────────────────────────
 const canvas       = document.getElementById('gameCanvas');
@@ -138,9 +191,38 @@ const overlay      = document.getElementById('overlay');
 const puntosFinal  = document.getElementById('puntosFinal');
 const btnReiniciar = document.getElementById('btnReiniciar');
 const startMsg     = document.getElementById('startMsg');
+const tapZone      = document.getElementById('tapZone');
+const container    = document.getElementById('gameContainer');
 
-const W = canvas.width;   // 480
-const H = canvas.height;  // 640
+// Dimensiones lógicas del canvas (siempre 480×640)
+canvas.width  = GAME_W;
+canvas.height = GAME_H;
+
+// ── ESCALAR AL TAMAÑO DE PANTALLA ─────────────────────────────────────────────
+function resizeGame() {
+  const screenW = window.innerWidth;
+  const screenH = window.innerHeight;
+
+  // Escala manteniendo proporción 480:640 (3:4)
+  const scale = Math.min(screenW / GAME_W, screenH / GAME_H);
+
+  const displayW = Math.floor(GAME_W * scale);
+  const displayH = Math.floor(GAME_H * scale);
+
+  // Aplica tamaño visual al canvas (CSS) sin cambiar la resolución lógica
+  canvas.style.width  = displayW + 'px';
+  canvas.style.height = displayH + 'px';
+
+  // Ajusta el contenedor
+  container.style.width  = displayW + 'px';
+  container.style.height = displayH + 'px';
+}
+
+resizeGame();
+window.addEventListener('resize', resizeGame);
+window.addEventListener('orientationchange', () => {
+  setTimeout(resizeGame, 200); // pequeño delay para que el navegador actualice dimensiones
+});
 
 // ── IMÁGENES ──────────────────────────────────────────────────────────────────
 const imgBird = new Image();
@@ -151,7 +233,6 @@ let loaded = 0;
 
 function onLoad() {
   loaded++;
-  // Cuando ambas imágenes terminaron (con éxito o error) dibujamos la pantalla inicial
   if (loaded >= 2) drawStartFrame();
 }
 
@@ -164,22 +245,19 @@ imgBird.src = 'pajaro.png';
 imgPipe.src = 'tuvo verde.png';
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
-let state = 'start';   // 'start' | 'playing' | 'gameover'
+let state = 'start';
 let animId = null;
-
 let bird  = {};
 let pipes = [];
 let score = 0;
 let lastPipeTime = 0;
-
-// Nubes decorativas para el fondo
 let clouds = [];
 
 function initClouds() {
   clouds = [];
   for (let i = 0; i < 5; i++) {
     clouds.push({
-      x:     Math.random() * W,
+      x:     Math.random() * GAME_W,
       y:     30 + Math.random() * 200,
       w:     90 + Math.random() * 80,
       h:     28 + Math.random() * 24,
@@ -189,7 +267,7 @@ function initClouds() {
 }
 
 function resetGame() {
-  bird = { x: CFG.birdX, y: H / 2, vy: 0, w: CFG.birdW, h: CFG.birdH };
+  bird = { x: CFG.birdX, y: GAME_H / 2, vy: 0, w: CFG.birdW, h: CFG.birdH };
   pipes = [];
   score = 0;
   lastPipeTime = 0;
@@ -198,26 +276,22 @@ function resetGame() {
 
 // ── DIBUJO ────────────────────────────────────────────────────────────────────
 function drawBg() {
-  // Cielo degradado
-  const sky = ctx.createLinearGradient(0, 0, 0, H * 0.75);
-  sky.addColorStop(0,   '#4fc3f7');
-  sky.addColorStop(1,   '#b3e5fc');
+  const sky = ctx.createLinearGradient(0, 0, 0, GAME_H * 0.75);
+  sky.addColorStop(0, '#4fc3f7');
+  sky.addColorStop(1, '#b3e5fc');
   ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, W, H * 0.75);
+  ctx.fillRect(0, 0, GAME_W, GAME_H * 0.75);
 
-  // Tierra
-  const ground = ctx.createLinearGradient(0, H * 0.75, 0, H);
-  ground.addColorStop(0, '#66bb6a');
+  const ground = ctx.createLinearGradient(0, GAME_H * 0.75, 0, GAME_H);
+  ground.addColorStop(0,   '#66bb6a');
   ground.addColorStop(0.3, '#43a047');
   ground.addColorStop(1,   '#2e7d32');
   ctx.fillStyle = ground;
-  ctx.fillRect(0, H * 0.75, W, H * 0.25);
+  ctx.fillRect(0, GAME_H * 0.75, GAME_W, GAME_H * 0.25);
 
-  // Línea de hierba
   ctx.fillStyle = '#81c784';
-  ctx.fillRect(0, H * 0.75, W, 12);
+  ctx.fillRect(0, GAME_H * 0.75, GAME_W, 12);
 
-  // Nubes
   ctx.fillStyle = 'rgba(255,255,255,0.88)';
   for (const c of clouds) drawCloud(c.x, c.y, c.w, c.h);
 }
@@ -238,7 +312,6 @@ function drawBird() {
   if (birdOk) {
     ctx.drawImage(imgBird, -bird.w / 2, -bird.h / 2, bird.w, bird.h);
   } else {
-    // Fallback: círculo amarillo
     ctx.fillStyle = '#FFD700';
     ctx.beginPath();
     ctx.ellipse(0, 0, bird.w / 2, bird.h / 2, 0, 0, Math.PI * 2);
@@ -253,39 +326,31 @@ function drawBird() {
 
 function drawPipes() {
   for (const p of pipes) {
-    const topH = p.gapY - CFG.pipeGap / 2;   // altura tubería superior
-    const botY = p.gapY + CFG.pipeGap / 2;   // inicio tubería inferior
-    const botH = H - botY;                    // altura tubería inferior
+    const topH = p.gapY - CFG.pipeGap / 2;
+    const botY = p.gapY + CFG.pipeGap / 2;
+    const botH = GAME_H - botY;
 
     if (pipeOk) {
-      // Tubería inferior (imagen normal)
       ctx.drawImage(imgPipe, p.x, botY, CFG.pipeWidth, botH);
-
-      // Tubería superior (imagen volteada verticalmente)
       ctx.save();
       ctx.translate(p.x + CFG.pipeWidth / 2, topH / 2);
       ctx.scale(1, -1);
       ctx.drawImage(imgPipe, -CFG.pipeWidth / 2, -topH / 2, CFG.pipeWidth, topH);
       ctx.restore();
     } else {
-      // Fallback: rectángulos verdes con borde
-      // Tubería superior
       ctx.fillStyle = '#33691e';
       ctx.fillRect(p.x, 0, CFG.pipeWidth, topH);
       ctx.fillStyle = '#558b2f';
       ctx.fillRect(p.x + 4, 0, CFG.pipeWidth - 8, topH - 4);
-      // Capuchón superior
       ctx.fillStyle = '#33691e';
       ctx.fillRect(p.x - 5, topH - 22, CFG.pipeWidth + 10, 22);
       ctx.fillStyle = '#558b2f';
       ctx.fillRect(p.x - 3, topH - 20, CFG.pipeWidth + 6, 18);
 
-      // Tubería inferior
       ctx.fillStyle = '#33691e';
       ctx.fillRect(p.x, botY, CFG.pipeWidth, botH);
       ctx.fillStyle = '#558b2f';
       ctx.fillRect(p.x + 4, botY + 4, CFG.pipeWidth - 8, botH);
-      // Capuchón inferior
       ctx.fillStyle = '#33691e';
       ctx.fillRect(p.x - 5, botY, CFG.pipeWidth + 10, 22);
       ctx.fillStyle = '#558b2f';
@@ -308,16 +373,16 @@ function drawScore() {
 function drawStartFrame() {
   drawBg();
   if (birdOk) {
-    ctx.drawImage(imgBird, W / 2 - CFG.birdW / 2, H / 2 - CFG.birdH / 2, CFG.birdW, CFG.birdH);
+    ctx.drawImage(imgBird, GAME_W / 2 - CFG.birdW / 2, GAME_H / 2 - CFG.birdH / 2, CFG.birdW, CFG.birdH);
   }
 }
 
 // ── LÓGICA ────────────────────────────────────────────────────────────────────
 function spawnPipe(now) {
   const minGapY = 100 + CFG.pipeGap / 2;
-  const maxGapY = H - 100 - CFG.pipeGap / 2;
+  const maxGapY = GAME_H - 100 - CFG.pipeGap / 2;
   const gapY = minGapY + Math.random() * (maxGapY - minGapY);
-  pipes.push({ x: W, gapY, scored: false });
+  pipes.push({ x: GAME_W, gapY, scored: false });
   lastPipeTime = now;
 }
 
@@ -325,28 +390,20 @@ function updateClouds() {
   for (const c of clouds) {
     c.x -= c.speed;
     if (c.x + c.w < 0) {
-      c.x = W + c.w;
+      c.x = GAME_W + c.w;
       c.y = 30 + Math.random() * 200;
     }
   }
 }
 
 function checkCollision() {
-  // Bordes del canvas
-  if (bird.y <= 0 || bird.y + bird.h >= H) return true;
-
-  // Colisión con tuberías (bounding box reducido 4px por lado para más justicia)
-  const bL = bird.x + 4;
-  const bR = bird.x + bird.w - 4;
-  const bT = bird.y + 4;
-  const bB = bird.y + bird.h - 4;
-
+  if (bird.y <= 0 || bird.y + bird.h >= GAME_H) return true;
+  const bL = bird.x + 4, bR = bird.x + bird.w - 4;
+  const bT = bird.y + 4, bB = bird.y + bird.h - 4;
   for (const p of pipes) {
-    const pL = p.x;
-    const pR = p.x + CFG.pipeWidth;
+    const pL = p.x, pR = p.x + CFG.pipeWidth;
     const topH = p.gapY - CFG.pipeGap / 2;
     const botY = p.gapY + CFG.pipeGap / 2;
-
     if (bR > pL && bL < pR) {
       if (bT < topH || bB > botY) return true;
     }
@@ -366,44 +423,25 @@ function updateScore() {
 // ── GAME LOOP ─────────────────────────────────────────────────────────────────
 function gameLoop(now) {
   if (state !== 'playing') return;
-
-  // Física
   bird.vy = Math.min(bird.vy + CFG.gravity, CFG.terminalVel);
   bird.y += bird.vy;
-
-  // Nubes
   updateClouds();
-
-  // Tuberías
   if (now - lastPipeTime > CFG.pipeInterval) spawnPipe(now);
   pipes = pipes.filter(p => p.x + CFG.pipeWidth > 0);
   for (const p of pipes) p.x -= CFG.pipeSpeed;
-
-  // Puntuación
   updateScore();
-
-  // Colisión
   if (checkCollision()) { gameOver(); return; }
-
-  // Render
   drawBg();
   drawPipes();
   drawBird();
   drawScore();
-
   animId = requestAnimationFrame(gameLoop);
 }
 
 function gameOver() {
   state = 'gameover';
   cancelAnimationFrame(animId);
-
-  // Último frame
-  drawBg();
-  drawPipes();
-  drawBird();
-  drawScore();
-
+  drawBg(); drawPipes(); drawBird(); drawScore();
   puntosFinal.textContent = 'Puntuación: ' + score;
   overlay.classList.add('visible');
 }
@@ -418,20 +456,35 @@ function startGame() {
   animId = requestAnimationFrame(gameLoop);
 }
 
-// ── CONTROLES ─────────────────────────────────────────────────────────────────
+// ── ACCIÓN DE VOLAR (flap) ────────────────────────────────────────────────────
+function doFlap() {
+  if (state === 'start')        startGame();
+  else if (state === 'playing') bird.vy = CFG.flapSpeed;
+  // gameover → ignorar (el botón Reiniciar lo maneja)
+}
+
+// ── CONTROLES: TECLADO ────────────────────────────────────────────────────────
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Space' || e.keyCode === 32) {
     e.preventDefault();
-    if (state === 'start')   startGame();
-    else if (state === 'playing') bird.vy = CFG.flapSpeed;
-    // gameover → ignorar
+    doFlap();
   }
 });
 
-canvas.addEventListener('click', () => {
-  if (state === 'start')        startGame();
-  else if (state === 'playing') bird.vy = CFG.flapSpeed;
-});
+// ── CONTROLES: TOQUE / CLIC ───────────────────────────────────────────────────
+// tapZone cubre todo el canvas y captura toques durante el juego
+tapZone.addEventListener('touchstart', (e) => {
+  e.preventDefault();   // evita el scroll y el zoom al tocar
+  doFlap();
+}, { passive: false });
+
+tapZone.addEventListener('click', doFlap);
+
+// El botón Reiniciar también funciona con toque
+btnReiniciar.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  startGame();
+}, { passive: false });
 
 btnReiniciar.addEventListener('click', startGame);
 </script>
